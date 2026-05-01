@@ -158,7 +158,12 @@ if __name__ == "__main__":
 
         stereo_out = np.vstack((mix_m1, mix_m2)).T
         output_filename = "Simulated_Environment.wav"
+        
+        print(f"Writing {output_filename}...")
         sf.write(output_filename, stereo_out, sample_rate)
         
+        print("Writing Ground_Truth.npz...")
         gt_labels, pt, pa, pb = generate_ground_truth(signal_map['Target'], signal_map['Intf_1'], signal_map['Intf_2'])
-        np.savez('ground_truth.npz', labels=gt_labels, p_t=pt, p_a=pa, p_b=pb)
+        np.savez('Ground_Truth.npz', labels=gt_labels, p_t=pt, p_a=pa, p_b=pb)
+        
+        print("Successfully Executed!")

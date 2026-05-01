@@ -1,7 +1,8 @@
 import csv
 import json
 
-def generate_outputs(predictions, gt_data=None, calc_powers=None, csv_filename='predictions.csv', json_filename='metrics.json'):
+def generate_outputs(predictions, gt_data=None, calc_powers=None, csv_filename='Predictions.csv', json_filename='Metrics.json'):
+    print(f"Writing {csv_filename}...")
     with open(csv_filename, 'w', newline='') as f:
         writer = csv.writer(f)
         
@@ -39,5 +40,6 @@ def generate_outputs(predictions, gt_data=None, calc_powers=None, csv_filename='
         "smoothing_strategy": "A median filter (kernel size = 21, approx 105ms) was applied globally over the output array to effectively eliminate jitter while preserving abrupt source transitions."
     }
     
+    print(f"Writing {json_filename}...")
     with open(json_filename, 'w') as f:
         json.dump(metrics, f, indent=4)

@@ -92,7 +92,10 @@ if __name__ == "__main__":
     final_preds, calc_powers = process_file(input_file)
     
     gt_data = None
-    if os.path.exists('ground_truth.npz'):
-        gt_data = np.load('ground_truth.npz')
+    if os.path.exists('Ground_Truth.npz'):
+        gt_data = np.load('Ground_Truth.npz')
     
     generate_outputs(final_preds, gt_data=gt_data, calc_powers=calc_powers)
+    
+    print("Successfully Executed!")
+    print("Analysis Complete!")
