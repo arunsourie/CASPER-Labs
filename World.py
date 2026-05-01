@@ -3,14 +3,10 @@ import soundfile as sf
 import os
 import glob
 import random
-import argparse
 import librosa
 import kagglehub
-import pyroomacoustics as pra
-from scipy.signal import fftconvolve
-import matplotlib.pyplot as plt
+from scipy.signal import medfilt
 
-#Parameters
 sample_rate = 16000
 sound_speed = 343.0
 mic_spacing = 0.08
@@ -18,15 +14,13 @@ source_distance = 1
 min_duration = 5
 n_needed = 3
 
-#Functions
 def coordinates(angle_deg, distance):
     angle_rad = np.radians(angle_deg)
-    x = distance*np.sin(angle_rad)
-    y = distance*np.cos(angle_rad)
+    x = distance * np.sin(angle_rad)
+    y = distance * np.cos(angle_rad)
     return np.array([x, y])
 
 def audio_files(dataset, n_needed, min_duration):
-    print(f"--- Fetching {n_needed} files (>= {min_duration}s) from: {dataset} ---")
     files = []
     try:
         if dataset == 'librispeech':
@@ -41,11 +35,10 @@ def audio_files(dataset, n_needed, min_duration):
             files = glob.glob(os.path.join(wav_path, "*.wav"))
         
         if len(files) == 0: 
-            raise ValueError(f"No files found for {dataset}")
+            raise ValueError()
 
         random.shuffle(files)
         valid_files = []
-        print("Scanning files for duration requirements...")
         
         for f in files:
             if len(valid_files) >= n_needed:
@@ -58,32 +51,25 @@ def audio_files(dataset, n_needed, min_duration):
                 continue
 
         if len(valid_files) < n_needed:
-            print(f"Warning: Only found {len(valid_files)} valid files >= {min_duration}s. Duplicating.")
             if len(valid_files) == 0:
-                 raise ValueError("No files found meeting the duration requirement.")
+                 raise ValueError()
             while len(valid_files) < n_needed:
                 valid_files += valid_files
             valid_files = valid_files[:n_needed]
         
         return valid_files
     
-    except Exception as e:
-        print(f"Error getting data: {e}")
+    except Exception:
         return []
 
-def sample_delay(source_pos, mic_pos):
-    distance = np.linalg.norm(source_pos - mic_pos)
-    time_delay = distance/sound_speed
-    return int(np.round(time_delay*sample_rate))
-
-def apply_delay(signal, delay_samples):
-    if delay_samples == 0:
-        return signal
-    padded_signal = np.pad(signal, (delay_samples, 0), mode='constant')
-    return padded_signal[:len(signal)]
+def apply_fractional_delay(signal, delay_sec, sr):
+    X = np.fft.rfft(signal)
+    freqs = np.fft.rfftfreq(len(signal), d=1.0/sr)
+    X_shifted = X * np.exp(-1j * 2 * np.pi * freqs * delay_sec)
+    return np.fft.irfft(X_shifted, n=len(signal))
 
 def load_and_format_signals(file_paths, sr, duration):
-    target_len = sr*duration
+    target_len = sr * duration
     signals = []
     for path in file_paths:
         audio, _ = librosa.load(path, sr=sr)
@@ -94,18 +80,54 @@ def load_and_format_signals(file_paths, sr, duration):
         signals.append(audio)
     return signals
 
+def generate_ground_truth(sig_t, sig_a, sig_b, frame_size=80, margin_db=3.0, kernel_size=21):
+    num_frames = len(sig_a) // frame_size
+    raw_gt = []
+    p_t_list, p_a_list, p_b_list = [], [], []
+
+    for i in range(num_frames):
+        start = i * frame_size
+        end = start + frame_size
+        
+        f_t = sig_t[start:end]
+        f_a = sig_a[start:end]
+        f_b = sig_b[start:end]
+        
+        p_t = np.sum(f_t**2) / frame_size
+        p_a = np.sum(f_a**2) / frame_size
+        p_b = np.sum(f_b**2) / frame_size
+        
+        p_t = max(p_t, 1e-10)
+        p_a = max(p_a, 1e-10)
+        p_b = max(p_b, 1e-10)
+        
+        p_t_list.append(p_t)
+        p_a_list.append(p_a)
+        p_b_list.append(p_b)
+        
+        diff_db = 10 * np.log10(p_a / p_b)
+        
+        if diff_db > margin_db:
+            raw_gt.append(1)
+        elif diff_db < -margin_db:
+            raw_gt.append(2)
+        else:
+            raw_gt.append(0)
+            
+    smoothed_gt = medfilt(raw_gt, kernel_size=kernel_size).astype(int)
+    return smoothed_gt, np.array(p_t_list), np.array(p_a_list), np.array(p_b_list)
+
 mics = {
-    'M1':np.array([-mic_spacing/2, 0.0]),
-    'M2':np.array([mic_spacing/2, 0.0])
-    }
+    'M1': np.array([-mic_spacing/2, 0.0]),
+    'M2': np.array([mic_spacing/2, 0.0])
+}
 
 sources = {
-    'Target':coordinates(0, source_distance),
-    'Intf_1':coordinates(60, source_distance),
-    'Intf_2':coordinates(-60, source_distance)
-    }
+    'Target': coordinates(0, source_distance),
+    'Intf_1': coordinates(60, source_distance),
+    'Intf_2': coordinates(-60, source_distance)
+}
 
-#Main Module
 if __name__ == "__main__":
     dataset_choice = 'ljspeech' 
     fetched_files = audio_files(dataset_choice, n_needed, min_duration)
@@ -125,16 +147,18 @@ if __name__ == "__main__":
 
         for name, sig in signal_map.items():
             pos = sources[name]
-            d1 = sample_delay(pos, mics['M1'])
-            d2 = sample_delay(pos, mics['M2'])
             
-            mix_m1 += apply_delay(sig, d1)
-            mix_m2 += apply_delay(sig, d2)
+            dist1 = np.linalg.norm(pos - mics['M1'])
+            dist2 = np.linalg.norm(pos - mics['M2'])
+            t1 = dist1 / sound_speed
+            t2 = dist2 / sound_speed
+            
+            mix_m1 += apply_fractional_delay(sig, t1, sample_rate)
+            mix_m2 += apply_fractional_delay(sig, t2, sample_rate)
 
         stereo_out = np.vstack((mix_m1, mix_m2)).T
         output_filename = "Simulated_Environment.wav"
-        
         sf.write(output_filename, stereo_out, sample_rate)
-        print(f"Simulation complete. Mixed audio saved to {output_filename}")
-    else:
-        print("Failed to fetch required audio files. Simulation aborted.")
+        
+        gt_labels, pt, pa, pb = generate_ground_truth(signal_map['Target'], signal_map['Intf_1'], signal_map['Intf_2'])
+        np.savez('ground_truth.npz', labels=gt_labels, p_t=pt, p_a=pa, p_b=pb)
