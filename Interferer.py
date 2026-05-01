@@ -38,6 +38,14 @@ def process_file(filepath):
         end = start + FRAME_SIZE
         frame = audio[start:end]
         
+        frame_energy = np.mean(frame**2)
+        if frame_energy < 1e-5:
+            p_t_calc.append(0.0)
+            p_a_calc.append(0.0)
+            p_b_calc.append(0.0)
+            raw_predictions.append(0)
+            continue
+        
         p_t = calculate_mvdr_power(frame, steer_t)
         p_a = calculate_mvdr_power(frame, steer_a)
         p_b = calculate_mvdr_power(frame, steer_b)

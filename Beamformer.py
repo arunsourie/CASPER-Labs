@@ -5,7 +5,7 @@ def get_steering_vector(delay, freqs):
     a_mic2 = np.exp(1j * 2 * np.pi * freqs * delay)
     return np.array([a_mic1, a_mic2])
 
-def calculate_mvdr_power(frame_2ch, steering_vector, diag_load=1e-3):
+def calculate_mvdr_power(frame_2ch, steering_vector, diag_load=1e-3, sr=16000):
     window = np.hanning(frame_2ch.shape[0])
     frame_windowed = frame_2ch * window[:, np.newaxis]
     
@@ -13,7 +13,14 @@ def calculate_mvdr_power(frame_2ch, steering_vector, diag_load=1e-3):
     total_power = 0.0
     num_bins = X.shape[1]
     
+    # Calculate actual frequencies for each bin
+    freqs = np.fft.rfftfreq(frame_2ch.shape[0], d=1.0/sr)
+    
     for f in range(num_bins):
+        # NEW: Skip frequencies outside the reliable speech/array geometry band
+        if freqs[f] < 300 or freqs[f] > 2500:
+            continue
+            
         x_f = X[:, f].reshape(2, 1)
         a_f = steering_vector[:, f].reshape(2, 1)
         
