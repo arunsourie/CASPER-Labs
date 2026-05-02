@@ -1,5 +1,0 @@
-{
-    "target_mitigation_strategy": "Minimum Variance Distortionless Response (MVDR) formulation inherently constructs a spatial covariance matrix. This explicitly suppresses the highest-variance uncorrelated noise source (the continuous broadside target) to mathematically mitigate its presence prior to power evaluation.",
-    "processing_type": "Non-Causal",
-    "smoothing_strategy": "A median filter (kernel size = 21, approx 105ms) was applied globally over the output array to effectively eliminate jitter while preserving abrupt source transitions."
-}
