@@ -146,4 +146,7 @@ if __name__ == "__main__":
     # info = sf.info(output_filename)
     # print(info)
     sf.write(output_filename, multichannel_out, sample_rate, subtype='PCM_16')
+
+    np.savez('Ground_Truth.npz', azimuth=a_deg, elevation=e_deg)
+
     print("Successfully Executed!")
