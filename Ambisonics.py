@@ -30,16 +30,18 @@ def estimate_doa(audio_path):
 
 if __name__ == "__main__":
     wav_file = "Simulated_Environment_32Ch.wav"
+    gt_file = "Ground_Truth.npz"
     
     try:
+        gt = np.load(gt_file)
         est_azi, est_ele = estimate_doa(wav_file)
-        
-        # Load Ground Truth to compare
-        gt = np.load('Ground_Truth.npz')
-        
-        print("--- DoA Estimation Results ---")
+        true_azi, true_ele = gt['azimuth'], gt['elevation']
+        azi_error = abs(est_azi - true_azi)
+        ele_error = abs(est_ele -  true_ele)
+                
+        print("--- DoA Estimation Results (Ambisonics) ---")
         print(f"Estimated: Azimuth: {est_azi:2.1f}°, Elevation: {est_ele:2.1f}°")
         print(f"Actual:    Azimuth: {gt['azimuth']:2.1f}°, Elevation: {gt['elevation']:2.1f}°")
-        print(f"Error:     {abs(est_azi - gt['azimuth']):2.1f}°")
+        print(f"Error:     Azimuth Error: {azi_error:3.1f}°, Elevation Error: {ele_error:3.1f}°")
     except FileNotFoundError:
         print("Please run the simulator (World.py) first to generate the input file.")
